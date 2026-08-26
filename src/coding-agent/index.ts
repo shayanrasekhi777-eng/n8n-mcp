@@ -20,6 +20,7 @@ export interface AgentAction {
   query?: string;
   command?: string;
   reason?: string;
+  summary?: string;
 }
 
 export interface AgentResult {
@@ -49,9 +50,7 @@ function safeRelative(workspace: string, candidate: string): string {
   const resolvedWorkspace = path.resolve(workspace);
   const resolved = path.resolve(resolvedWorkspace, candidate);
   const relative = path.relative(resolvedWorkspace, resolved);
-  if (relative.startsWith('..') || path.isAbsolute(relative)) {
-    throw new Error(`Path escapes workspace: ${candidate}`);
-  }
+  if (relative.startsWith('..') || path.isAbsolute(relative)) throw new Error(`Path escapes workspace: ${candidate}`);
   return resolved;
 }
 
@@ -61,29 +60,15 @@ function run(command: string, cwd: string, timeoutMs: number): Promise<{ code: n
     let stdout = '';
     let stderr = '';
     let settled = false;
-    const finish = (value: { code: number; stdout: string; stderr: string }) => {
-      if (!settled) {
-        settled = true;
-        resolve(value);
-      }
-    };
+    const finish = (value: { code: number; stdout: string; stderr: string }) => { if (!settled) { settled = true; resolve(value); } };
     const timer = setTimeout(() => {
       child.kill('SIGTERM');
       finish({ code: 124, stdout, stderr: `${stderr}\nCommand timed out after ${timeoutMs}ms` });
     }, timeoutMs);
     child.stdout.on('data', chunk => { stdout += chunk.toString(); });
     child.stderr.on('data', chunk => { stderr += chunk.toString(); });
-    child.on('error', error => {
-      clearTimeout(timer);
-      if (!settled) {
-        settled = true;
-        reject(error);
-      }
-    });
-    child.on('close', code => {
-      clearTimeout(timer);
-      finish({ code: code ?? 1, stdout, stderr });
-    });
+    child.on('error', error => { clearTimeout(timer); if (!settled) { settled = true; reject(error); } });
+    child.on('close', code => { clearTimeout(timer); finish({ code: code ?? 1, stdout, stderr }); });
   });
 }
 
@@ -145,8 +130,6 @@ export class CodingAgent {
   }
 
   async execute(command: string): Promise<{ code: number; stdout: string; stderr: string }> {
-    // Network access is opt-in. Commands remain the user's responsibility, but the
-    // agent does not silently grant network access when running in an isolated setup.
     if (!this.config.allowNetwork && /\b(curl|wget|Invoke-WebRequest|npm\s+(publish|login)|git\s+push)\b/i.test(command)) {
       throw new Error('Network/publishing command blocked. Set CODING_AGENT_ALLOW_NETWORK=true explicitly.');
     }
@@ -174,12 +157,10 @@ export class CodingAgent {
   private parseAction(raw: string): AgentAction {
     const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)?.[1] ?? raw;
     const parsed = JSON.parse(fenced.trim());
-    if (!parsed || typeof parsed !== 'object' || typeof parsed.action !== 'string') {
-      throw new Error('Model returned an invalid action object');
-    }
-    const map: Record<string, AgentAction['type']> = { read: 'read', search: 'search', write: 'write', run: 'run', finish: 'finish' };
-    if (!map[parsed.action]) throw new Error(`Unsupported agent action: ${parsed.action}`);
-    return { ...parsed, type: map[parsed.action] } as AgentAction;
+    if (!parsed || typeof parsed !== 'object' || typeof parsed.action !== 'string') throw new Error('Model returned an invalid action object');
+    const allowed = new Set(['read', 'search', 'write', 'run', 'finish']);
+    if (!allowed.has(parsed.action)) throw new Error(`Unsupported agent action: ${parsed.action}`);
+    return { ...parsed, type: parsed.action } as AgentAction;
   }
 
   private async act(action: AgentAction): Promise<string> {
@@ -206,7 +187,8 @@ export class CodingAgent {
 
   async runTask(task: string): Promise<AgentResult> {
     if (!this.client) throw new Error('OPENAI_API_KEY is required for autonomous mode');
-    const model = this.config.model || process.env.CODING_AGENT_MODEL || 'gpt-5.6-luna';
+    const model = this.config.model || process.env.CODING_AGENT_MODEL;
+    if (!model) throw new Error('CODING_AGENT_MODEL or --model is required; no model name is assumed.');
     let context = 'No actions taken yet.';
     let actions = 0;
     let tests = 0;
@@ -216,7 +198,10 @@ export class CodingAgent {
       const response = await this.client.chat.completions.create({
         model,
         temperature: 0,
-        messages: [{ role: 'system', content: 'You are a precise coding agent. JSON only.' }, { role: 'user', content: this.buildPrompt(task, context) }],
+        messages: [
+          { role: 'system', content: 'You are a precise coding agent. JSON only.' },
+          { role: 'user', content: this.buildPrompt(task, context) },
+        ],
       });
       const raw = response.choices[0]?.message?.content;
       if (!raw) throw new Error('Model returned an empty response');
@@ -232,9 +217,7 @@ export class CodingAgent {
         const output = await this.act(action);
         if (action.type === 'run') tests++;
         context = `${action.type}: ${output}`;
-        if (action.type === 'finish') {
-          return { status: this.config.dryRun ? 'dry-run' : 'completed', summary: action.summary || output, iterations: iteration, actions, tests, failures };
-        }
+        if (action.type === 'finish') return { status: this.config.dryRun ? 'dry-run' : 'completed', summary: action.summary || output, iterations: iteration, actions, tests, failures };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         failures.push(`Iteration ${iteration}: ${message}`);
@@ -242,14 +225,7 @@ export class CodingAgent {
       }
     }
 
-    return {
-      status: 'failed',
-      summary: 'Iteration budget exhausted before the agent produced a finish action.',
-      iterations: this.config.maxIterations,
-      actions,
-      tests,
-      failures,
-    };
+    return { status: 'failed', summary: 'Iteration budget exhausted before the agent produced a finish action.', iterations: this.config.maxIterations, actions, tests, failures };
   }
 }
 
