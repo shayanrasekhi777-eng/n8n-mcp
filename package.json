@@ -4,15 +4,10 @@
   "description": "Integration between n8n workflow automation and Model Context Protocol (MCP)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "require": "./dist/index.js",
-      "import": "./dist/index.js"
-    }
-  },
+  "exports": { ".": { "types": "./dist/index.d.ts", "require": "./dist/index.js", "import": "./dist/index.js" } },
   "bin": {
-    "n8n-mcp": "./dist/mcp/index.js"
+    "n8n-mcp": "./dist/mcp/index.js",
+    "n8n-coding-agent": "./dist/coding-agent/cli.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -26,6 +21,7 @@
     "start:http": "MCP_MODE=http node dist/mcp/index.js",
     "start:http:fixed:deprecated": "echo 'DEPRECATED: USE_FIXED_HTTP is deprecated. Use npm run start:http instead.' && MCP_MODE=http USE_FIXED_HTTP=true node dist/mcp/index.js",
     "start:n8n": "N8N_MODE=true MCP_MODE=http node dist/mcp/index.js",
+    "coding-agent": "node dist/coding-agent/cli.js",
     "http": "npm run build && npm run start:http",
     "dev": "npm run build && npm run rebuild && npm run validate",
     "dev:http": "MCP_MODE=http nodemon --watch src --ext ts --exec 'npm run build && npm run start:http'",
@@ -105,33 +101,13 @@
     "test:release-automation": "node scripts/test-release-automation.js",
     "prepare:release": "node scripts/prepare-release.js"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/czlonkowski/n8n-mcp.git"
-  },
-  "keywords": [
-    "n8n",
-    "mcp",
-    "model-context-protocol",
-    "ai",
-    "workflow",
-    "automation"
-  ],
+  "repository": { "type": "git", "url": "git+https://github.com/czlonkowski/n8n-mcp.git" },
+  "keywords": ["n8n", "mcp", "model-context-protocol", "ai", "workflow", "automation", "coding-agent"],
   "author": "Romuald Czlonkowski @ www.aiadvisors.pl/en",
   "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/czlonkowski/n8n-mcp/issues"
-  },
+  "bugs": { "url": "https://github.com/czlonkowski/n8n-mcp/issues" },
   "homepage": "https://github.com/czlonkowski/n8n-mcp#readme",
-  "files": [
-    "dist/**/*",
-    "ui-apps/dist/**/*",
-    "data/nodes.db",
-    ".env.example",
-    "README.md",
-    "LICENSE",
-    "package.runtime.json"
-  ],
+  "files": ["dist/**/*", "ui-apps/dist/**/*", "data/nodes.db", ".env.example", "README.md", "LICENSE", "package.runtime.json"],
   "devDependencies": {
     "@faker-js/faker": "^9.9.0",
     "@testing-library/jest-dom": "^6.6.4",
@@ -174,7 +150,5 @@
     "@rollup/rollup-linux-x64-gnu": "^4.50.0",
     "better-sqlite3": "^11.10.0"
   },
-  "overrides": {
-    "pyodide": "0.26.4"
-  }
+  "overrides": { "pyodide": "0.26.4" }
 }
