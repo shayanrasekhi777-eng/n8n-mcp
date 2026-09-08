@@ -37,6 +37,11 @@ AI results can be unpredictable. Protect your work!
 
 ## 🚀 Quick Start
 
+### Kali Linux
+
+For a local, Docker-based installation of n8n and n8n-MCP on Kali Linux, including
+API-key setup and verification steps, see the [Kali Linux setup guide](docs/KALI_LINUX_SETUP.fa.md).
+
 ### Option 1: Hosted Service (Easiest - No Setup!) ☁️
 
 **The fastest way to try n8n-MCP** - no installation, no configuration:
